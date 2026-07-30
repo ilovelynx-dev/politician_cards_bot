@@ -226,7 +226,7 @@ async def cmd_collection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     cards = db.get_cards(user.id)
     if not cards:
-        await update.message.reply_text("\U0001f4ed У тебя пока нет карт. Угадывай политиков в чате!")
+        await update.message.reply_text("\U0001f4ed У тебя пока нет карт. Пиши \"Мудак\" в чат!")
         return
 
     await _show_collection_page(update, context, cards, 0)
