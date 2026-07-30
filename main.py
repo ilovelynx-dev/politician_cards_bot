@@ -25,6 +25,18 @@ db = Database("politician_cards.db")
 PAGE_SIZE = 8
 
 
+def _image_path(politician_id: str, variant: str = "") -> str | None:
+    for ext in ("png", "jpg", "jpeg", "gif", "webp"):
+        if variant:
+            path = os.path.join("images", f"{politician_id}_{variant}.{ext}")
+            if os.path.exists(path):
+                return path
+        path = os.path.join("images", f"{politician_id}.{ext}")
+        if os.path.exists(path):
+            return path
+    return None
+
+
 async def give_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
@@ -63,7 +75,7 @@ async def give_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stamina=stamina,
     )
 
-    text = (
+    caption = (
         f"\U0001f3b4 **Новая карта!**\n\n"
         f"\U0001f539 **{politician.name}**\n"
         f"{politician.description}\n\n"
@@ -73,7 +85,12 @@ async def give_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"\U0001f4ac Харизма: **{charisma}**\n"
         f"\U0001f4aa Выносливость: **{stamina}**"
     )
-    await update.message.reply_text(text)
+    img_path = _image_path(politician.id, variant)
+    if img_path:
+        with open(img_path, "rb") as f:
+            await update.message.reply_photo(photo=f, caption=caption, parse_mode=ParseMode.MARKDOWN)
+    else:
+        await update.message.reply_text(caption, parse_mode=ParseMode.MARKDOWN)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
