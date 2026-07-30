@@ -94,10 +94,10 @@ class Database:
 
     @staticmethod
     def _generate_tag() -> str:
-        rare = ["KGB", "FSB", "CIA", "MI6", "BNE"]
+        rare = ["KREMLIN", "WHITE", "CONGRESS", "SENATE", "BUNKER"]
         if random.random() < 0.04:
             return random.choice(rare)
-        return "".join(random.choices(string.ascii_uppercase, k=3))
+        return "".join(random.choices(string.ascii_uppercase, k=5))
 
     def add_card(self, user_id: int, politician_id: str, power: int, variant: str = "",
                  influence: int = 70, charisma: int = 70, stamina: int = 80) -> tuple[int, str]:
