@@ -13,7 +13,7 @@ from telegram.ext import (
     MessageHandler, filters, ContextTypes
 )
 
-from config import TOKEN, DESPAWN_TIME_SECONDS, MAX_COLLECTION_PER_USER, API_BASE
+from config import TOKEN, MAX_COLLECTION_PER_USER, API_BASE
 from database import Database
 from politicians import politicians
 
@@ -22,44 +22,30 @@ log = logging.getLogger("politician_bot")
 
 db = Database("politician_cards.db")
 
-active_spawns: dict[int, dict] = {}
-_spawn_id_counter = 1
-
 PAGE_SIZE = 8
 
 
-def _image_path(politician_id: str, variant: str = "") -> str | None:
-    for ext in ("png", "jpg", "jpeg", "gif", "webp"):
-        if variant:
-            path = os.path.join("images", f"{politician_id}_{variant}.{ext}")
-            if os.path.exists(path):
-                return path
-        path = os.path.join("images", f"{politician_id}.{ext}")
-        if os.path.exists(path):
-            return path
-    return None
+async def give_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
+    if update.message.text.startswith("/"):
+        return
 
+    text = update.message.text.strip().lower()
+    if "мудак" not in text:
+        return
 
-def _variant_label(variant: str) -> str:
-    labels = {"old": " (старая версия)"}
-    return labels.get(variant, "")
+    user = update.effective_user
+    chat_id = update.effective_chat.id
 
-
-def _card_summary(card) -> str:
-    p = politicians.get(card.politician_id)
-    name = p.name if p else "?"
-    return f"`{card.tag}_{card.id}` {name}{_variant_label(card.variant)}"
-
-
-async def spawn_politician(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
-    global _spawn_id_counter
-    if any(s.get("chat_id") == chat_id for s in active_spawns.values() if not s.get("caught_by")):
+    cards = db.get_cards(user.id)
+    if len(cards) >= MAX_COLLECTION_PER_USER:
+        await update.message.reply_text(
+            f"\u274c У тебя уже {MAX_COLLECTION_PER_USER} карт! Освободи место через /release."
+        )
         return
 
     politician = politicians.get_random()
-    spawn_id = _spawn_id_counter
-    _spawn_id_counter += 1
-
     variant = ""
     if politician.id == "putin" and random.random() < 0.3:
         variant = "old"
@@ -69,113 +55,31 @@ async def spawn_politician(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
     stamina = max(10, politician.stamina + random.randint(-10, 10))
     power = max(10, politician.power + random.randint(-10, 10))
 
+    card_id, tag = db.add_card(
+        user.id, politician.id, power,
+        variant=variant,
+        influence=influence,
+        charisma=charisma,
+        stamina=stamina,
+    )
+
     text = (
-        f"\U0001f3af **Кто этот политик?**\n"
-        f"*Напиши имя в чат, чтобы получить карточку!*\n\n"
-        f"\U0001f4cc Подсказка: {politician.description}" if politician.description else ""
+        f"\U0001f3b4 **Новая карта!**\n\n"
+        f"\U0001f539 **{politician.name}**\n"
+        f"{politician.description}\n\n"
+        f"\U0001f4cb `{tag}_{card_id}`\n"
+        f"\U000026a1 Сила: **{power}**\n"
+        f"\U0001f399 Влияние: **{influence}**\n"
+        f"\U0001f4ac Харизма: **{charisma}**\n"
+        f"\U0001f4aa Выносливость: **{stamina}**"
     )
-
-    msg = await context.bot.send_message(
-        chat_id=chat_id,
-        text=text,
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-    active_spawns[spawn_id] = {
-        "politician_id": politician.id,
-        "chat_id": chat_id,
-        "message_id": msg.message_id,
-        "caught_by": None,
-        "spawned_at": datetime.now(),
-        "variant": variant,
-        "influence": influence,
-        "charisma": charisma,
-        "stamina": stamina,
-        "power": power,
-    }
-
-    asyncio.create_task(_despawn(spawn_id, DESPAWN_TIME_SECONDS, context))
-
-
-async def _despawn(spawn_id: int, delay: int, context: ContextTypes.DEFAULT_TYPE):
-    await asyncio.sleep(delay)
-    spawn = active_spawns.get(spawn_id)
-    if spawn and not spawn.get("caught_by"):
-        try:
-            await context.bot.edit_message_text(
-                chat_id=spawn["chat_id"],
-                message_id=spawn["message_id"],
-                text="\u23f0 Этот политик исчез... Никто не угадал имя.",
-            )
-        except Exception:
-            pass
-        active_spawns.pop(spawn_id, None)
-
-
-async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
-    if update.message.text.startswith("/"):
-        return
-
-    text = update.message.text.strip().lower()
-    user = update.effective_user
-    chat_id = update.effective_chat.id
-
-    if "мудак" in text:
-        await spawn_politician(chat_id, context)
-        return
-
-    for spawn_id, spawn in list(active_spawns.items()):
-        if spawn.get("caught_by") or spawn["chat_id"] != chat_id:
-            continue
-
-        p = politicians.get(spawn["politician_id"])
-        if not p:
-            continue
-
-        if not p.matches_name(text):
-            continue
-
-        spawn["caught_by"] = user.id
-        variant = spawn.get("variant", "")
-
-        cards = db.get_cards(user.id)
-        if len(cards) >= MAX_COLLECTION_PER_USER:
-            await update.message.reply_text(
-                f"\u274c У тебя уже {MAX_COLLECTION_PER_USER} карт! Освободи место через /release."
-            )
-            return
-
-        card_id, tag = db.add_card(
-            user.id, p.id, spawn["power"],
-            variant=variant,
-            influence=spawn["influence"],
-            charisma=spawn["charisma"],
-            stamina=spawn["stamina"],
-        )
-
-        await context.bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=spawn["message_id"],
-            text=f"\u2705 **{p.name}**\n\n\U0001f3c5 Пойман **{user.full_name}**!",
-            parse_mode=ParseMode.MARKDOWN,
-        )
-
-        await update.message.reply_text(
-            f"\U0001f389 **{user.full_name}** угадал политика! Это был **{p.name}**!\n"
-            f"Получена карта: `{tag}_{card_id}` (\U000026a1{p.power})",
-            parse_mode=ParseMode.MARKDOWN,
-        )
-
-        active_spawns.pop(spawn_id, None)
-        break
+    await update.message.reply_text(text)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "\U0001f44b Привет! Я бот с карточками политиков.\n\n"
-        "\U0001f4a1 Напиши в чат \"Мудак\" — появится случайный политик! Угадай имя, чтобы получить карту.\n\n"
+        "\U0001f4a1 Напиши в чат \"Мудак\" — получишь случайную карту политика!\n\n"
         "\U0001f4cb **Команды:**\n"
         "/collection — мои карты\n"
         "/profile — моя статистика\n"
@@ -383,7 +287,7 @@ def main():
     app.add_handler(CommandHandler("release", cmd_release))
     app.add_handler(CommandHandler("stats", cmd_stats))
     app.add_handler(CallbackQueryHandler(collection_callback, pattern=r"^col_page_"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, give_card))
 
     app.add_error_handler(error_handler)
 
