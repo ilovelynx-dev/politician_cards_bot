@@ -25,6 +25,7 @@ class Politician:
 class PoliticianManager:
     def __init__(self):
         self.all: list[Politician] = []
+        self.boss: Politician | None = None
         self._by_id: dict[str, Politician] = {}
         self._init_politicians()
 
@@ -36,8 +37,6 @@ class PoliticianManager:
                        description="Президент Республики Беларусь"),
             Politician("trump", "Дональд Трамп", ["трамп", "trump", "дональд", "donald"], 85, 90, 80, weight=75,
                        description="45-й президент США"),
-            Politician("biden", "Джо Байден", ["байден", "biden", "джо", "joe"], 80, 60, 65, weight=65,
-                       description="46-й президент США"),
             Politician("macron", "Эммануэль Макрон", ["макрон", "macron", "эммануэль", "emmanuel"], 70, 75, 70, weight=55,
                        description="Президент Франции"),
             Politician("scholz", "Олаф Шольц", ["шольц", "scholz", "олаф", "olaf"], 65, 55, 60, weight=50,
@@ -67,6 +66,8 @@ class PoliticianManager:
         ]
         self.all = data
         self._by_id = {p.id: p for p in data}
+        self.boss = Politician("biden", "Джо Байден", ["байден", "biden", "джо", "joe", "sleepy joe"], 99, 99, 99,
+                               description="Бывший президент США")
 
     def get(self, politician_id: str) -> Politician | None:
         return self._by_id.get(politician_id)

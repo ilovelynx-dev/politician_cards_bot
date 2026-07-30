@@ -57,15 +57,24 @@ async def give_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    politician = politicians.get_random()
-    variant = ""
-    if politician.id == "putin" and random.random() < 0.3:
-        variant = "old"
+    is_boss = politicians.boss and random.random() < 0.15
 
-    influence = max(10, politician.influence + random.randint(-10, 10))
-    charisma = max(10, politician.charisma + random.randint(-10, 10))
-    stamina = max(10, politician.stamina + random.randint(-10, 10))
-    power = max(10, politician.power + random.randint(-10, 10))
+    if is_boss:
+        politician = politicians.boss
+        variant = "boss"
+        influence = max(50, politician.influence + random.randint(-5, 5))
+        charisma = max(50, politician.charisma + random.randint(-5, 5))
+        stamina = max(50, politician.stamina + random.randint(-5, 5))
+        power = max(50, politician.power + random.randint(-5, 5))
+    else:
+        politician = politicians.get_random()
+        variant = ""
+        if politician.id == "putin" and random.random() < 0.3:
+            variant = "old"
+        influence = max(10, politician.influence + random.randint(-10, 10))
+        charisma = max(10, politician.charisma + random.randint(-10, 10))
+        stamina = max(10, politician.stamina + random.randint(-10, 10))
+        power = max(10, politician.power + random.randint(-10, 10))
 
     card_id, tag = db.add_card(
         user.id, politician.id, power,
@@ -75,9 +84,11 @@ async def give_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stamina=stamina,
     )
 
+    boss_icon = "\U0001f451 " if is_boss else ""
+    title_text = "\U0001f451 **БОСС** " if is_boss else "\U0001f539 "
     caption = (
-        f"\U0001f3b4 **Новая карта!**\n\n"
-        f"\U0001f539 **{politician.name}**\n"
+        f"{boss_icon}**Новая карта!**\n\n"
+        f"{title_text}**{politician.name}**\n"
         f"{politician.description}\n\n"
         f"\U0001f4cb `{tag}_{card_id}`\n"
         f"\U000026a1 Сила: **{power}**\n"
