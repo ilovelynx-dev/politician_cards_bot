@@ -20,7 +20,7 @@ from politicians import politicians
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("politician_bot")
 
-db = Database("politician_cards.db")
+db = Database()
 
 PAGE_SIZE = 8
 
